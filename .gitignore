@@ -1,0 +1,22 @@
+# Claude Code Sandbox
+# This contains your auth tokens, logs, and container-specific binaries
+.claude_sandbox/
+
+# Local Launcher Script
+# This contains hardcoded paths to your current directory
+claude-start.sh
+
+# Node.js
+# Claude Code may generate these if it runs builds or installs local pkgs
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# System Files
+.DS_Store
+Thumbs.db
+
+# Optional: If you want to keep the setup script but not the container logs
+*.log
