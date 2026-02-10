@@ -1,4 +1,4 @@
-```markdown
+
 # Claude Code in a Box (Alpine Edition)
 
 A secure, isolated development environment for running **Claude Code** inside an Alpine Linux Distrobox container. 
