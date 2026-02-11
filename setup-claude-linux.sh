@@ -1,39 +1,47 @@
 #!/bin/bash
+set -e
 
 # --- Configuration ---
 CONTAINER_NAME="claude-workspace"
 IMAGE="alpine:latest"
-CPU_LIMIT="8"          # Updated to 8 CPU cores
+CPU_LIMIT="8"
 MEM_LIMIT="8G"
 
-# 1. Prepare Workspace & Gitignore
-WORKSPACE_DIR=$(pwd)
+WORKSPACE_DIR="$(pwd)"
 SANDBOX_HOME="$WORKSPACE_DIR/.claude_sandbox"
+
+echo "🛠 Preparing workspace..."
 mkdir -p "$SANDBOX_HOME"
 
-echo "📝 Updating .gitignore..."
-cat <<EOF >> .gitignore
-# Claude Sandbox & Launcher
+# --- Update .gitignore safely ---
+if [ -f .gitignore ]; then
+    grep -qxF ".claude_sandbox/" .gitignore || echo ".claude_sandbox/" >> .gitignore
+    grep -qxF "claude-start.sh" .gitignore || echo "claude-start.sh" >> .gitignore
+    grep -qxF "node_modules/" .gitignore || echo "node_modules/" >> .gitignore
+else
+    cat <<EOF > .gitignore
 .claude_sandbox/
 claude-start.sh
 node_modules/
 EOF
+fi
 
-# Clean up duplicates
-sort -u .gitignore -o .gitignore
+echo "🐳 Creating container (if not exists)..."
 
-echo "🛡️  Initializing restricted Distrobox in: $WORKSPACE_DIR"
+# Only create if it doesn't already exist
+if ! distrobox list | grep -q "$CONTAINER_NAME"; then
+    distrobox create -n "$CONTAINER_NAME" -i "$IMAGE" --yes \
+        --home "$SANDBOX_HOME" \
+        --additional-flags "--cpus=$CPU_LIMIT --memory=$MEM_LIMIT --volume $WORKSPACE_DIR:$WORKSPACE_DIR:rw"
+else
+    echo "Container already exists. Skipping creation."
+fi
 
-# 2. Create the container
-distrobox create -n "$CONTAINER_NAME" -i "$IMAGE" --yes \
-    --home "$SANDBOX_HOME" \
-    --additional-flags "--cpus=$CPU_LIMIT --memory=$MEM_LIMIT --volume $WORKSPACE_DIR:$WORKSPACE_DIR:rw -e USE_BUILTIN_RIPGREP=0"
+echo "📦 Installing dependencies inside container..."
 
-echo "📦 Installing Claude Code, Python, and matplotlib..."
-
-# 3. Setup Inside Alpine
 distrobox enter "$CONTAINER_NAME" -- sh -c "
     sudo apk update
+
     sudo apk add --no-cache \
         nodejs npm git bash curl \
         libgcc libstdc++ gcompat \
@@ -41,29 +49,33 @@ distrobox enter "$CONTAINER_NAME" -- sh -c "
         python3 py3-pip python3-dev \
         musl-dev freetype-dev libpng-dev
 
-    # Upgrade pip
     python3 -m pip install --upgrade pip setuptools wheel
 
-    # Install matplotlib
-    python3 -m pip install matplotlib
+    # Install scientific stack
+    python3 -m pip install numpy matplotlib
 
-    # Install Claude Code
-    curl -fsSL https://claude.ai/install.sh | bash
-
-    # Fix PATH inside the sandbox
-    echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> \$HOME/.profile
-    echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> \$HOME/.bashrc
+    # Install Claude Code (if not installed)
+    if ! command -v claude >/dev/null 2>&1; then
+        curl -fsSL https://claude.ai/install.sh | bash
+    fi
 "
 
-# 4. Create Launcher
+echo "🚀 Creating launcher..."
+
 cat <<EOF > ./claude-start.sh
 #!/bin/bash
-distrobox enter $CONTAINER_NAME -- bash -l -c "cd $WORKSPACE_DIR && claude"
+set -e
+WORKSPACE_DIR="\$(pwd)"
+exec distrobox enter $CONTAINER_NAME -- bash -c "cd \"\$WORKSPACE_DIR\" && exec claude"
 EOF
 
 chmod +x ./claude-start.sh
 
-echo "---"
-echo "✅ Setup Complete!"
-echo "🚀 To start Claude, run:"
+echo "--------------------------------"
+echo "✅ Setup Complete"
+echo "🧠 Uses 8 CPU cores"
+echo "📊 matplotlib + numpy installed"
+echo ""
+echo "Start Claude with:"
 echo "./claude-start.sh"
+echo "--------------------------------"
