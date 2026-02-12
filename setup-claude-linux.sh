@@ -42,6 +42,7 @@ echo "📦 Installing dependencies inside container..."
 distrobox enter "$CONTAINER_NAME" -- sh -c "
     sudo apk update
 
+    # 1. Install System Basics
     sudo apk add --no-cache \
         nodejs npm git bash curl \
         libgcc libstdc++ gcompat \
@@ -49,12 +50,14 @@ distrobox enter "$CONTAINER_NAME" -- sh -c "
         python3 py3-pip python3-dev \
         musl-dev freetype-dev libpng-dev
 
+    # 2. Upgrade pip (standard practice)
     python3 -m pip install --upgrade pip setuptools wheel
 
-    # Install scientific stack
-    python3 -m pip install numpy matplotlib
+    # 3. CRITICAL: Install Matplotlib & Numpy via APK (Pre-compiled)
+    # Installing these via pip on Alpine is slow and prone to failure.
+    sudo apk add --no-cache py3-matplotlib py3-numpy
 
-    # Install Claude Code (if not installed)
+    # 4. Install Claude Code (if not installed)
     if ! command -v claude >/dev/null 2>&1; then
         curl -fsSL https://claude.ai/install.sh | bash
     fi
@@ -74,7 +77,7 @@ chmod +x ./claude-start.sh
 echo "--------------------------------"
 echo "✅ Setup Complete"
 echo "🧠 Uses 8 CPU cores"
-echo "📊 matplotlib + numpy installed"
+echo "📊 matplotlib + numpy installed (via apk)"
 echo ""
 echo "Start Claude with:"
 echo "./claude-start.sh"
